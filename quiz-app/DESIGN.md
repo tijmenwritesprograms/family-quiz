@@ -69,32 +69,82 @@ Quiz Match is a multiplayer web-based quiz application where players answer pers
 
 ### 3.1 Game Phases
 
-**Phase 1: Home & Lobby**
-- Players create or join games via game codes
-- Host controls game start
-- Real-time player list updates
+**Phase 1: Home**
+- Players can create a new game or join an existing game via game code
 
-**Phase 2: Answering**
-- Each player answers questions independently
+**Phase 2: Create Game Screen (Host Only)**
+- Host selects and adds questions to the game
+- Host can customize question selection
+- Upon completion, game code is generated
+
+**Phase 3: Answering**
+- Players answer questions independently as soon as they join
+- No waiting for all players - answering begins immediately
 - Asynchronous operation (no real-time requirements)
+- Players can join at any time and start answering
 - Progress tracking per player
 
-**Phase 3: Matching**
+**Phase 4: Matching**
 - Players match answers to other players
 - Real-time scoring and progress updates
 - Simultaneous participation
 
-**Phase 4: Results**
+**Phase 5: Results**
 - Final score calculation
 - Leaderboard display
 - Option to play again
 
-### 3.2 User Journey
+### 3.2 User Journeys
+
+#### 3.2.1 Create Game Journey
 
 ```
-Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
-    → Match Answers → View Results → Home Screen
+Home Screen → Click "Create Game" 
+    → Create Game Screen (select questions)
+    → Game Code Generated 
+    → Immediately Start Answering Questions
+    → (Continue to Match Answers → View Results)
 ```
+
+**Detailed Flow:**
+1. **Home Screen**: User clicks "Create Game" button
+2. **Create Game Screen**: 
+   - User sees available questions
+   - User selects/adds questions to the game
+   - User can customize question order or settings
+   - User clicks "Create Game" to finalize
+3. **Game Code Display**:
+   - System generates unique 6-character game code
+   - Code is displayed to user for sharing
+4. **Immediate Answering**:
+   - User is automatically transitioned to answering phase
+   - No "Start Game" action required
+   - User begins answering selected questions
+5. **Real-Time Updates**:
+   - Other players can join using the game code
+   - Host sees players joining in real-time while answering
+   - All players answer independently at their own pace
+
+#### 3.2.2 Join Game Journey
+
+```
+Home Screen → Enter Game Code → Click "Join Game"
+    → Immediately Start Answering Questions
+    → (Continue to Match Answers → View Results)
+```
+
+**Detailed Flow:**
+1. **Home Screen**: User enters game code and clicks "Join Game"
+2. **Validation**: System verifies game exists and is in "created" state
+3. **Immediate Answering**:
+   - User is immediately shown the questions
+   - No lobby waiting period
+   - User begins answering at their own pace
+4. **Real-Time Presence**:
+   - Other players see new player has joined
+   - All players continue answering independently
+
+**Note:** The lobby concept is effectively removed - players transition directly from joining to answering. The "waiting room" functionality is replaced with an active answering phase where players can see who else is in the game.
 
 ---
 
@@ -107,26 +157,30 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 - Display name
 - Connection state
 - Role (host/participant)
+- Answer progress tracking
 
 **Game Session**
 - Game code (6-character identifier)
-- Current phase
+- Current phase (created, answering, matching, completed)
 - Host player reference
 - List of players
-- List of questions
+- List of selected questions
 - Configuration settings
+- Created timestamp
 
 **Question**
 - Unique identifier
 - Question text
 - Category (favorite/preference/other)
 - Order in game
+- Available for selection
 
 **Answer**
 - Question reference
 - Player reference
 - Answer text
 - Timestamp
+- Submission status
 
 **Match Attempt**
 - Answer reference
@@ -144,11 +198,12 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 **Purpose:** State-changing operations and data retrieval where real-time updates are not critical.
 
 **Use Cases:**
-- Game creation and configuration
-- Player joining
-- Question submission
+- Game creation with question selection
+- Player joining (immediate access to questions)
+- Question retrieval for create game screen
 - Answer submission
 - Game state queries
+- Player progress tracking
 
 **Characteristics:**
 - Standard HTTP methods (GET, POST, PUT, DELETE)
@@ -159,15 +214,15 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 
 ### 5.2 SignalR (Real-Time Operations)
 
-**Purpose:** Bidirectional real-time communication for lobby updates, game state changes, and interactive matching phase.
+**Purpose:** Bidirectional real-time communication for player presence updates, game state changes, and interactive matching phase.
 
 **Use Cases:**
-- Lobby updates (player joins/leaves)
-- Game start notification
+- Player join/leave notifications (during answering phase)
+- Real-time player list updates
+- Answer progress broadcasting
+- Transition to matching phase notification
 - Real-time match submissions
-- Progress broadcasting
 - Score updates
-- Host actions
 
 **Characteristics:**
 - Persistent connection
@@ -182,44 +237,50 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 ### 6.1 REST Endpoints
 
 **Game Management:**
-- Create game
-- Join game with code
-- Get game details
-- Get game status
-- Update game settings (host only)
+- `POST /api/games` - Create game with selected questions (returns game code)
+- `POST /api/games/{gameCode}/join` - Join game (immediate access to questions)
+- `GET /api/games/{gameCode}` - Get game details and player list
+- `GET /api/games/{gameCode}/status` - Get game status
+- `PATCH /api/games/{gameCode}/phase` - Transition game phase (future use)
 
 **Question Management:**
-- Get questions for game
-- Submit custom questions (future)
+- `GET /api/questions` - Get available questions for selection
+- `GET /api/games/{gameCode}/questions` - Get questions for a specific game
+- `POST /api/questions` - Submit custom questions (future)
 
 **Answer Management:**
-- Submit player answers
-- Get answers for matching phase
+- `POST /api/games/{gameCode}/answers` - Submit player answers
+- `GET /api/games/{gameCode}/answers` - Get all answers for matching phase
+- `GET /api/games/{gameCode}/players/{playerId}/progress` - Get answer progress
 
 **Game Control:**
-- Start game (host only)
-- End game
-- Restart game
+- `DELETE /api/games/{gameCode}` - End game (host only)
+- `POST /api/games/{gameCode}/restart` - Restart game (future)
 
 ### 6.2 SignalR Hub Methods
 
-**Lobby Operations:**
-- Join game lobby
-- Leave game lobby
-- Start game signal
-- Player joined notification
-- Player left notification
+**Player Presence:**
+- `JoinGame(gameCode)` - Join game SignalR group
+- `LeaveGame(gameCode)` - Leave game SignalR group
+- `PlayerJoined` - Notification when new player joins
+- `PlayerLeft` - Notification when player leaves
+- `UpdatePlayerList` - Broadcast current player list
 
-**Game Operations:**
-- Submit match attempt
-- Broadcast player progress
-- Request game state sync
-- Answer submission notification
+**Game Progress:**
+- `AnswerSubmitted` - Notification when player submits answer
+- `PlayerProgress(playerId, progress)` - Broadcast player answer progress
+- `TransitionToMatchPhase` - Notification to move all players to matching
+- `RequestGameStateSync` - Request current game state
+
+**Matching Phase:**
+- `SubmitMatchAttempt` - Submit match guess
+- `BroadcastScore` - Update scores in real-time
+- `MatchPhaseComplete` - All players finished matching
 
 **Lifecycle:**
-- Connection established
-- Connection lost (cleanup)
-- Reconnection handling
+- `OnConnectedAsync` - Connection established
+- `OnDisconnectedAsync` - Connection lost (cleanup)
+- Reconnection handling with state preservation
 
 ---
 
@@ -228,30 +289,36 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 ### 7.1 Component Structure
 
 **Core Components:**
-- HomeScreen: Game creation and joining
-- QuestionFlow: Guided question answering with navigation
-- QuestionAnswer: Individual question display and input
-- QuestionMatch: Matching interface with answer selection
+- `HomeScreen` - Game creation and joining entry point
+- `CreateGameScreen` - Question selection and game configuration (new)
+- `QuestionFlow` - Guided question answering with navigation
+- `QuestionAnswer` - Individual question display and input
+- `QuestionMatch` - Matching interface with answer selection
+- `PlayerProgress` - Display of player answering progress (new)
 - Results display components
 
 **Component Communication:**
 - Props for parent-to-child data flow
 - Events for child-to-parent communication
 - Reactive state management for local component state
+- SignalR event handling for real-time updates
 
 ### 7.2 State Management
 
 **Application State:**
-- Current game phase
-- Player information
+- Current game phase (home, create, answering, matching, results)
+- Player information (ID, name, role)
 - Game code and session details
+- Selected questions (for create game screen)
 - Question and answer data
+- Player progress tracking
 - Match results
 
 **Connection State:**
 - SignalR connection status
 - Reconnection handling
 - Network error management
+- Player presence tracking
 
 ---
 
@@ -260,17 +327,19 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 ### 8.1 Service Layer
 
 **Game Service:**
-- Game lifecycle management
-- Player management
-- Question distribution
+- Game lifecycle management (create with questions, join, complete)
+- Player management and presence tracking
+- Question selection and distribution
 - Answer validation and storage
 - Match scoring logic
+- Progress tracking for all players
+- Phase transition logic
 
 **State Management:**
 - Game session storage and retrieval
-- Player tracking
-- Connection mapping
-- Data consistency
+- Player tracking and connection mapping
+- Answer progress tracking
+- Data consistency and validation
 
 ### 8.2 Hub Architecture
 
@@ -290,11 +359,13 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 - Token-based player identification
 - Session validation
 - Game access control
+- Player reconnection with stored session
 
 **Host Privileges:**
 - Verify host status before privileged operations
-- Game start/stop permissions
-- Configuration changes
+- Question selection rights (during game creation)
+- Game deletion permissions
+- Configuration changes (future)
 
 ### 9.2 Data Validation
 
@@ -302,11 +373,13 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 - Game code format validation
 - Player name sanitization
 - Answer length restrictions
-- Rate limiting
+- Question selection limits
+- Rate limiting for API calls
 
 **Game State Validation:**
-- Phase transition rules
+- Phase transition rules (created → answering → matching → completed)
 - Player count limits
+- Join validation (game must be in "created" or "answering" state)
 - Timeout handling
 
 ---
@@ -404,18 +477,22 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 ### Phase 1: Core Foundation (Current)
 - ✅ Vue 3 frontend structure
 - ✅ Basic game flow components
-- ✅ Home screen and lobby UI
+- ✅ Home screen UI
+- ✅ Question answering flow
+- 🔄 Create game screen with question selection
 - 🔄 ASP.NET Core backend setup
 
 ### Phase 2: Connectivity
-- REST API implementation
-- SignalR hub implementation
+- REST API implementation for game creation with questions
+- REST API for immediate join and answer access
+- SignalR hub implementation for player presence
 - Client-server integration
-- Basic error handling
+- Basic error handling and reconnection
 
 ### Phase 3: Real-Time Features
-- Lobby synchronization
-- Real-time matching
+- Player presence synchronization during answering
+- Real-time progress broadcasting
+- Real-time matching phase
 - Score broadcasting
 - Connection resilience
 
@@ -466,10 +543,12 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 
 ### 15.2 User Experience Metrics
 
-- Time to create/join game < 30 seconds
+- Time to create game (including question selection) < 60 seconds
+- Time to join game and start answering < 15 seconds
 - Average game duration: 10-15 minutes
 - Player retention through full game > 90%
 - Reconnection success rate > 95%
+- Immediate transition to answering phase (no waiting)
 
 ---
 
@@ -478,9 +557,13 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 ### A. Glossary
 
 - **Game Code:** 6-character unique identifier for a game session
-- **Host:** Player who created the game and controls game flow
+- **Host:** Player who created the game and selected the questions
+- **Create Game Screen:** Interface where host selects questions before game code is generated
+- **Answering Phase:** Game phase where players answer questions independently (begins immediately after joining)
 - **Match Phase:** Game phase where players guess answer-to-player mappings
 - **Game Session:** Complete game instance from creation to completion
+- **Player Presence:** Real-time tracking of players currently in the game
+- **Progress Tracking:** Monitoring how many questions each player has answered
 
 ### B. References
 
@@ -495,6 +578,7 @@ Start → Home Screen → Create/Join → Lobby (wait) → Answer Questions
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | January 2026 | Development Team | Initial design document |
+| 1.1 | January 2026 | Development Team | Updated user journeys: Added create game screen with question selection, removed lobby waiting phase, immediate answering upon joining |
 
 ---
 

@@ -1,4 +1,5 @@
-﻿using QuizServer.Hubs;
+﻿using Microsoft.AspNetCore.Mvc;
+using QuizServer.Hubs;
 using QuizServer.Models;
 using QuizServer.Services;
 
@@ -13,7 +14,12 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:5173") // Vite dev server
+        policy.SetIsOriginAllowed(origin =>
+              {
+                  // Allow any localhost origin (for development)
+                  var uri = new Uri(origin);
+                  return uri.Host == "localhost" || uri.Host == "127.0.0.1";
+              })
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials(); // Required for SignalR
@@ -31,12 +37,14 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors();
 
+
+
 // REST API Endpoints
 
 // Create a new game
-app.MapPost("/api/games", (IGameService gameService, string playerName) =>
+app.MapPost("/api/games", (IGameService gameService, CreateGameRequest request) =>
 {
-    var game = gameService.CreateGame(playerName);
+    var game = gameService.CreateGame(request.PlayerName);
     return Results.Ok(new
     {
         gameCode = game.GameCode,
@@ -45,16 +53,46 @@ app.MapPost("/api/games", (IGameService gameService, string playerName) =>
 });
 
 // Join an existing game
-app.MapPost("/api/games/{gameCode}/join", (string gameCode, string playerName, IGameService gameService) =>
+app.MapPost("/api/games/{gameCode}/join", (string gameCode, JoinGameRequest request, IGameService gameService) =>
 {
     try
     {
-        var game = gameService.JoinGame(gameCode, playerName);
+        var game = gameService.JoinGame(gameCode, request.PlayerName);
         var player = game.Players.Last();
         return Results.Ok(new
         {
             gameCode = game.GameCode,
             player = player
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Reconnect to an existing game
+app.MapPost("/api/games/{gameCode}/reconnect", (string gameCode, ReconnectRequest request, IGameService gameService) =>
+{
+    try
+    {
+        var game = gameService.GetGame(gameCode);
+        if (game == null)
+        {
+            return Results.NotFound(new { error = "Game not found" });
+        }
+
+        var player = game.Players.FirstOrDefault(p => p.Id == request.PlayerId);
+        if (player == null)
+        {
+            return Results.NotFound(new { error = "Player not found in this game" });
+        }
+
+        return Results.Ok(new
+        {
+            gameCode = game.GameCode,
+            player = player,
+            gameState = "lobby" // Can be extended to return actual game state
         });
     }
     catch (InvalidOperationException ex)
@@ -100,3 +138,8 @@ app.MapGet("/api/games/{gameCode}/questions/{questionId}/answers",
 app.MapHub<GameHub>("/hubs/game");
 
 app.Run();
+
+// Request DTOs
+record CreateGameRequest(string PlayerName);
+record JoinGameRequest(string PlayerName);
+record ReconnectRequest(string PlayerId);

@@ -9,6 +9,7 @@ var quizServer = builder.AddProject<Projects.QuizServer>("quiz-server");
 var quizApp = builder.AddViteApp("quiz-app", "../quiz-app")
     .WithExternalHttpEndpoints()
     .WithReference(quizServer)
+    .WithEnvironment("VITE_API_BASE_URL", quizServer.GetEndpoint("http"))
     .WaitFor(quizServer);
 
 builder.Build().Run();
